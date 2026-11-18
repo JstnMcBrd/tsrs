@@ -1,0 +1,21 @@
+[package]
+name = "tsrs_tsdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The Windows tsgo.exe launcher in the tsrs npm package's tsdk directory"
+
+[lints]
+workspace = true
+
+# `tsrs/tsdk/tsgo.exe` (issue #970): VS Code's `js/ts.tsdk.path` needs a `tsgo.exe` in the directory it names, and a
+# committed workspace setting cannot differ by OS. This small launcher lets `./node_modules/tsrs/tsdk` work on Windows
+# too, as `tsdk/tsgo` (a Node script) does on macOS and Linux. It finds the platform package's `tsrs.exe` the way
+# npm/tsrs/lib/getExePath.js does and runs it with the same arguments and stdio. Standard library only, so it stays
+# small: npm/build.mjs puts it in the main package, which every platform downloads.
+[[bin]]
+name = "tsgo"
+path = "src/main.rs"
+test = false

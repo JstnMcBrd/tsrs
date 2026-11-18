@@ -418,6 +418,17 @@ jobs:
           cargo build --release --locked -p tsrs_cli --features tsrs_cli/noembed --target ${{ matrix.target }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # The main package's tsdk/tsgo.exe (crates/tsrs_tsdk, issue #970). No PGO: it only starts tsrs.exe. The publish
+      # job packs the x64 build, which also runs on Windows ARM64; each job smokes its own.
+      - name: Build tsdk launcher
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p tsrs_tsdk --target ${{ matrix.target }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tsdk = Join-Path $env:GITHUB_WORKSPACE "out/${{ matrix.target }}/tsdk"
+          New-Item -ItemType Directory -Force $tsdk | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/tsgo.exe" (Join-Path $tsdk "tsgo.exe")
+
       - name: Stage and smoke binary
         shell: pwsh
         run: |
@@ -608,6 +619,7 @@ jobs:
           done
           for t in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
             test -f "artifacts/$t/tsrs.exe" || { echo "::error::missing binary for $t"; exit 1; }
+            test -f "artifacts/$t/tsdk/tsgo.exe" || { echo "::error::missing tsdk launcher for $t"; exit 1; }
           done
           ls -lR artifacts wasm-dist
 

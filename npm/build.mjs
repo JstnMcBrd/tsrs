@@ -6,6 +6,7 @@
 //   cargo build --release -p tsrs_cli --features noembed  # npm binary; standalone builds omit the feature
 //   node npm/build.mjs --binary aarch64-apple-darwin=target/release/tsrs --pack
 //   node npm/build.mjs --artifacts dir/ --pack      # dir/<target triple>/tsrs[.exe], as the release workflow lays out
+//   node npm/build.mjs --binary x86_64-pc-windows-msvc=tsrs.exe --tsdk-exe target/release/tsgo.exe --pack
 //   node npm/build.mjs --wasm npm/tsrs-wasm/tsrs.wasm --pack   # the WebAssembly package (tools/wasm/build.sh)
 //   node npm/build.mjs --print-version          # also --print-crate-version, --print-typescript-commit, --print-typescript-nightly, --check-tag <tag>
 //   node npm/build.mjs --sdk-only               # just compile the JS API (npm/tsrs/src -> npm/tsrs/dist)
@@ -18,6 +19,11 @@
 // the TypeScript-aligned `tsrs_cli` version from the workspace Cargo.toml, for every package
 // including `@tsrs/wasm` (npm/tsrs-wasm). The main package lists exactly the platforms given here, so a
 // release never points at a platform package that was not published.
+//
+// A package with a Windows binary also needs the tsdk launcher (`cargo build --release -p tsrs_tsdk`, crates/tsrs_tsdk),
+// which becomes the main package's tsdk/tsgo.exe, so `./node_modules/tsrs/tsdk` works as VS Code's `js/ts.tsdk.path` on
+// every OS. Give it with --tsdk-exe, or as dir/<windows triple>/tsdk/tsgo.exe with --artifacts (x64 preferred: it
+// also runs on Windows ARM64).
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -44,7 +50,7 @@ const TARGETS = {
 function usage(message) {
     if (message) console.error(`error: ${message}\n`);
     console.error(
-        "usage: node npm/build.mjs [--binary <triple>=<path>]... [--artifacts <dir>] [--out <dir>] [--pack] [--tsc <path>]\n" +
+        "usage: node npm/build.mjs [--binary <triple>=<path>]... [--artifacts <dir>] [--tsdk-exe <path>] [--out <dir>] [--pack] [--tsc <path>]\n" +
             "                          [--wasm <tsrs.wasm>] [--sdk-only]\n" +
             "                          [--check-tag <git tag>] [--print-version | --print-crate-version | --print-typescript-commit | --print-typescript-nightly]\n" +
             `triples: ${Object.keys(TARGETS).join(", ")}`,
@@ -53,7 +59,7 @@ function usage(message) {
 }
 
 function parseArgs(argv) {
-    const opts = { binaries: new Map(), out: path.join(npmDir, "dist"), pack: false, sdkOnly: false, tsc: undefined };
+    const opts = { binaries: new Map(), tsdkExes: [], out: path.join(npmDir, "dist"), pack: false, sdkOnly: false, tsc: undefined };
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
         const value = () => argv[++i] ?? usage(`${arg} needs a value`);
@@ -73,8 +79,15 @@ function parseArgs(argv) {
                         if (fs.existsSync(file)) opts.binaries.set(triple, file);
                     }
                 }
+                for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]) {
+                    const file = path.join(dir, triple, "tsdk", "tsgo.exe");
+                    if (fs.existsSync(file)) opts.tsdkExes.push(file);
+                }
                 break;
             }
+            case "--tsdk-exe":
+                opts.tsdkExe = path.resolve(value());
+                break;
             case "--wasm":
                 opts.wasm = path.resolve(value());
                 break;
@@ -323,6 +336,13 @@ function main() {
         }
         for (const bin of Object.values(template.bin ?? {})) fs.chmodSync(path.join(mainDir, bin), 0o755);
         fs.chmodSync(path.join(mainDir, "tsdk", "tsgo"), 0o755);
+        if ([...opts.binaries.keys()].some(triple => TARGETS[triple].os === "win32")) {
+            const launcher = opts.tsdkExe ?? opts.tsdkExes[0];
+            if (!launcher) throw new Error("a Windows binary needs the tsdk launcher: pass --tsdk-exe (cargo build --release -p tsrs_tsdk)");
+            if (!fs.existsSync(launcher)) throw new Error(`tsdk launcher not found: ${launcher}`);
+            fs.copyFileSync(launcher, path.join(mainDir, "tsdk", "tsgo.exe"));
+            fs.chmodSync(path.join(mainDir, "tsdk", "tsgo.exe"), 0o755);
+        }
         fs.writeFileSync(path.join(mainDir, "LICENSE"), license);
         fs.writeFileSync(path.join(mainDir, "NOTICE.txt"), notice);
         writeJson(path.join(mainDir, "package.json"), {

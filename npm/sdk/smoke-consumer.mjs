@@ -65,11 +65,13 @@ try {
     const cliVersion = run(bin, ["--version"], { shell: process.platform === "win32" }).trim();
     console.log(cliVersion);
 
-    // CLI/API keep using tsrs; Windows also ships the executable name VS Code discovers.
+    // CLI/API keep using tsrs. VS Code's SDK directory is tsrs/tsdk on every OS: tsdk/tsgo (a Node launcher) on
+    // macOS/Linux, tsdk/tsgo.exe (crates/tsrs_tsdk) on Windows. Windows platform packages also keep a tsgo.exe copy
+    // of tsrs.exe for settings that point at the platform package.
     const nativeExe = path.join(dir, "node_modules", getPlatformPackageName(), process.platform === "win32" ? "tsrs.exe" : "tsrs");
     if (fs.realpathSync(nativeExe) !== fs.realpathSync(exe)) throw new Error("CLI/API must resolve the tsrs executable");
-    const sdk = process.platform === "win32" ? path.join(path.dirname(nativeExe), "tsgo.exe") : path.join(dir, "node_modules/tsrs/tsdk/tsgo");
-    if (process.platform === "win32" && !fs.readFileSync(sdk).equals(fs.readFileSync(nativeExe))) {
+    const sdk = path.join(dir, "node_modules/tsrs/tsdk", process.platform === "win32" ? "tsgo.exe" : "tsgo");
+    if (process.platform === "win32" && !fs.readFileSync(path.join(path.dirname(nativeExe), "tsgo.exe")).equals(fs.readFileSync(nativeExe))) {
         throw new Error("Windows SDK compatibility executable differs from tsrs.exe");
     }
     if (run(nativeExe, ["--version"]).trim() !== cliVersion) throw new Error("Native executable version differs from the CLI");

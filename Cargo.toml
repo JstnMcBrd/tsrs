@@ -136,6 +136,10 @@ strip = "symbols" # set to `false` for debug information
 debug = false # set to `true` for debug information
 panic = "unwind"
 
+# The tsdk launcher ships in the main npm package, which every platform downloads: optimize it for size.
+[profile.release.package.tsrs_tsdk]
+opt-level = "z"
+
 [workspace.lints.rust]
 non_upper_case_globals = "deny"
 non_camel_case_types = "deny"

@@ -1543,6 +1543,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsrs_tsdk"
+version = "0.25.0"
+
+[[package]]
 name = "tsrs_tsoptions"
 version = "7.1.0-beta.tsrs2"
 dependencies = [
